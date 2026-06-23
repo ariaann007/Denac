@@ -42,6 +42,8 @@ export default function ScheduledPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [posting, setPosting] = useState(false);
+  const [postResult, setPostResult] = useState<{ posted: string[]; count: number } | null>(null);
 
   // form fields
   const [name, setName] = useState("");
@@ -149,6 +151,16 @@ export default function ScheduledPage() {
     load();
   };
 
+  const postDue = async () => {
+    setPosting(true);
+    setPostResult(null);
+    const res = await fetch("/api/cron/process-scheduled", { method: "POST" });
+    const data = await res.json();
+    setPostResult(data);
+    setPosting(false);
+    load(); // refresh dates
+  };
+
   const fmt = (n: number) =>
     new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
 
@@ -162,11 +174,58 @@ export default function ScheduledPage() {
 
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-bold">Scheduled Payments</h1>
-        <button onClick={openCreate} className="btn-primary">+ New Schedule</button>
+        <div className="flex gap-2">
+          <button
+            onClick={postDue}
+            disabled={posting}
+            className="btn-secondary disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {posting ? (
+              <><span className="animate-spin inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full"></span> Posting…</>
+            ) : (
+              "▶ Post Due Entries"
+            )}
+          </button>
+          <button onClick={openCreate} className="btn-primary">+ New Schedule</button>
+        </div>
       </div>
-      <p className="text-sm text-gray-500 mb-6">
-        Set up recurring journal entries for direct debits, standing orders and regular payments. They post automatically each day.
+      <p className="text-sm text-gray-500 mb-3">
+        Set up recurring journal entries for direct debits, standing orders and regular payments. They post automatically each day at 6am, or click <strong>Post Due Entries</strong> to post now.
       </p>
+
+      {postResult && (
+        <div className={`rounded-lg px-4 py-3 mb-4 text-sm flex items-start gap-2 ${postResult.count > 0 ? "bg-green-50 border border-green-200 text-green-800" : "bg-gray-50 border border-gray-200 text-gray-600"}`}>
+          {postResult.count > 0 ? (
+            <>
+              <span className="text-lg leading-none">✓</span>
+              <div>
+                <p className="font-semibold">{postResult.count} entr{postResult.count === 1 ? "y" : "ies"} posted to the journal</p>
+                <p className="text-xs mt-0.5 font-mono">{postResult.posted.join(", ")}</p>
+                <p className="text-xs mt-1 text-green-700">These now appear in the Journal, Ledger and Trial Balance.</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <span>ℹ</span>
+              <p>No entries are due today — nothing to post.</p>
+            </>
+          )}
+          <button onClick={() => setPostResult(null)} className="ml-auto text-gray-400 hover:text-gray-600 text-xs">✕</button>
+        </div>
+      )}
+
+      {(() => {
+        const dueCount = entries.filter(e => e.isActive && new Date(e.nextDueDate) <= new Date()).length;
+        return dueCount > 0 && !postResult ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4 flex items-center gap-3 text-sm text-amber-800">
+            <span className="text-lg">⚠</span>
+            <div className="flex-1">
+              <strong>{dueCount} payment{dueCount > 1 ? "s" : ""} due</strong> and not yet posted.
+              Click <strong>Post Due Entries</strong> to post them to the journal now.
+            </div>
+          </div>
+        ) : null;
+      })()}
 
       {entries.length === 0 ? (
         <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">
