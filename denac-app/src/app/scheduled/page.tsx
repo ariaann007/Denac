@@ -4,6 +4,14 @@ import Link from "next/link";
 
 type Account = { id: string; code: string; name: string };
 type SLine = { accountId: string; debit: string; credit: string };
+
+type Occurrence = {
+  entryId: string; entryName: string; reference: string;
+  date: string; week: string; amount: number;
+  lines: { accountId: string; accountName: string; accountType: string; debit: number; credit: number }[];
+};
+type WeekBucket = { weekStart: string; total: number; occurrences: Occurrence[] };
+type Warning = { date: string; entryName: string; accountName: string; required: number; available: number; shortfall: number };
 type ScheduledEntry = {
   id: string;
   name: string;
@@ -44,6 +52,8 @@ export default function ScheduledPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [postResult, setPostResult] = useState<{ posted: string[]; count: number } | null>(null);
+  const [forecast, setForecast] = useState<{ weeks: WeekBucket[]; warnings: Warning[] } | null>(null);
+  const [showForecast, setShowForecast] = useState(true);
 
   // form fields
   const [name, setName] = useState("");
@@ -62,7 +72,8 @@ export default function ScheduledPage() {
     Promise.all([
       fetch("/api/scheduled").then((r) => r.json()),
       fetch("/api/accounts").then((r) => r.json()),
-    ]).then(([s, a]) => { setEntries(s); setAccounts(a); });
+      fetch("/api/scheduled/upcoming").then((r) => r.json()),
+    ]).then(([s, a, f]) => { setEntries(s); setAccounts(a); setForecast(f); });
   };
 
   useEffect(load, []);
@@ -211,6 +222,98 @@ export default function ScheduledPage() {
             </>
           )}
           <button onClick={() => setPostResult(null)} className="ml-auto text-gray-400 hover:text-gray-600 text-xs">✕</button>
+        </div>
+      )}
+
+      {/* Cash Flow Forecast */}
+      {forecast && (forecast.weeks.length > 0 || forecast.warnings.length > 0) && (
+        <div className="bg-white rounded-xl shadow mb-6 overflow-hidden">
+          <button
+            onClick={() => setShowForecast(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-lg">📊</span>
+              <span className="font-semibold text-gray-800">8-Week Cash Flow Forecast</span>
+              {forecast.warnings.length > 0 && (
+                <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                  {forecast.warnings.length} balance warning{forecast.warnings.length > 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+            <span className="text-gray-400 text-sm">{showForecast ? "▲ Hide" : "▼ Show"}</span>
+          </button>
+
+          {showForecast && (
+            <div className="border-t border-gray-100">
+              {/* Balance warnings */}
+              {forecast.warnings.length > 0 && (
+                <div className="bg-red-50 border-b border-red-100 px-5 py-3 space-y-2">
+                  <p className="text-sm font-semibold text-red-800 flex items-center gap-1.5">⚠ Insufficient balance warnings</p>
+                  {forecast.warnings.map((w, i) => (
+                    <div key={i} className="text-sm text-red-700 bg-white border border-red-200 rounded px-3 py-2 flex items-center justify-between gap-4">
+                      <div>
+                        <span className="font-medium">{w.entryName}</span>
+                        <span className="text-red-400 mx-1.5">·</span>
+                        <span>{new Date(w.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                        <span className="text-red-400 mx-1.5">·</span>
+                        <span className="text-gray-600">{w.accountName}</span>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs text-gray-500">Available: <span className="font-mono">{fmt(w.available)}</span></div>
+                        <div className="text-xs font-semibold text-red-700">Shortfall: <span className="font-mono">-{fmt(w.shortfall)}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Weekly totals */}
+              {forecast.weeks.length > 0 ? (
+                <div className="px-5 py-4">
+                  <div className="grid grid-cols-1 gap-2">
+                    {forecast.weeks.map((week) => {
+                      const wStart = new Date(week.weekStart + "T00:00:00");
+                      const wEnd = new Date(wStart); wEnd.setDate(wEnd.getDate() + 6);
+                      const hasWarning = forecast.warnings.some(w => w.date >= week.weekStart && w.date <= wEnd.toISOString().split("T")[0]);
+                      return (
+                        <div key={week.weekStart} className={`rounded-lg border px-4 py-3 ${hasWarning ? "border-red-200 bg-red-50" : "border-gray-100 bg-gray-50"}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-semibold text-gray-700">
+                              {wStart.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                              {" – "}
+                              {wEnd.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                            </span>
+                            <span className={`font-mono font-bold text-sm ${hasWarning ? "text-red-700" : "text-gray-800"}`}>
+                              {fmt(week.total)}
+                              {hasWarning && <span className="ml-2 text-xs font-normal text-red-600">⚠ low balance</span>}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            {week.occurrences.map((occ, i) => (
+                              <div key={i} className="flex items-center justify-between text-xs text-gray-500">
+                                <span>
+                                  {new Date(occ.date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
+                                  <span className="mx-1.5 text-gray-300">·</span>
+                                  {occ.entryName}
+                                </span>
+                                <span className="font-mono text-gray-700">{fmt(occ.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-3">
+                    Forecast based on scheduled entry due dates for the next 8 weeks. Balances are checked against current account balances.
+                  </p>
+                </div>
+              ) : (
+                <div className="px-5 py-6 text-center text-sm text-gray-400">No payments scheduled in the next 8 weeks.</div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
