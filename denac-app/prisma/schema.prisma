@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Account {
+  id          String        @id @default(cuid())
+  code        String        @unique
+  name        String
+  type        String        // ASSET | LIABILITY | EQUITY | INCOME | EXPENSE
+  subtype     String?       // BANK | CASH | DEBTOR | CREDITOR
+  description String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  lines       JournalLine[]
+}
+
+model JournalEntry {
+  id          String        @id @default(cuid())
+  date        DateTime
+  reference   String
+  description String
+  createdAt   DateTime      @default(now())
+  lines       JournalLine[]
+}
+
+model JournalLine {
+  id             String       @id @default(cuid())
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  journalEntryId String
+  account        Account      @relation(fields: [accountId], references: [id])
+  accountId      String
+  debit          Float        @default(0)
+  credit         Float        @default(0)
+  description    String?
+}
