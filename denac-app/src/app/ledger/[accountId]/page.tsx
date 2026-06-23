@@ -32,6 +32,7 @@ const TYPE_DESCRIPTIONS: Record<string, string> = {
 export default function LedgerPage({ params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = use(params);
   const [data, setData] = useState<LedgerData | null>(null);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -65,6 +66,11 @@ export default function LedgerPage({ params }: { params: Promise<{ accountId: st
   const totalDebit  = rows.reduce((s, r) => s + r.debit, 0);
   const totalCredit = rows.reduce((s, r) => s + r.credit, 0);
   const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+
+  const sq = search.toLowerCase().trim();
+  const filteredRows = sq
+    ? rows.filter((r) => r.reference.toLowerCase().includes(sq) || r.description.toLowerCase().includes(sq))
+    : rows;
 
   return (
     <div className="max-w-5xl">
@@ -125,6 +131,17 @@ export default function LedgerPage({ params }: { params: Promise<{ accountId: st
         </div>
       </div>
 
+      {rows.length > 0 && (
+        <div className="mb-3">
+          <input
+            className="input max-w-sm text-sm"
+            placeholder="Search by reference or description…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <div className="bg-white rounded-xl shadow p-8 text-center">
           <p className="text-gray-400 mb-2">No transactions posted to this account yet.</p>
@@ -150,7 +167,10 @@ export default function LedgerPage({ params }: { params: Promise<{ accountId: st
                 <td className="px-4 py-2 text-right font-mono">0.00 {isDebitNormal ? "Dr" : "Cr"}</td>
               </tr>
 
-              {rows.map((row, idx) => {
+              {filteredRows.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400 text-sm">No transactions match your search.</td></tr>
+              )}
+              {filteredRows.map((row, idx) => {
                 const isNegBal = isDebitNormal ? row.balance < 0 : row.balance < 0;
                 return (
                   <tr key={row.id} className={`hover:bg-gray-50 ${idx % 2 === 0 ? "" : "bg-gray-50/50"}`}>

@@ -17,6 +17,7 @@ const emptyLine = (): Line => ({ accountId: "", debit: "", credit: "" });
 export default function JournalPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [date, setDate] = useState(today());
   const [reference, setReference] = useState("");
@@ -110,6 +111,16 @@ export default function JournalPage() {
   const fmt = (n: number) =>
     n === 0 ? "" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
 
+  const q = search.toLowerCase().trim();
+  const filtered = q
+    ? entries.filter(
+        (e) =>
+          e.reference.toLowerCase().includes(q) ||
+          e.description.toLowerCase().includes(q) ||
+          e.lines.some((l) => l.account.name.toLowerCase().includes(q) || l.account.code.toLowerCase().includes(q))
+      )
+    : entries;
+
   return (
     <div>
       <div className="flex items-center gap-1.5 text-sm text-gray-400 mb-4">
@@ -120,9 +131,18 @@ export default function JournalPage() {
         <span className="text-gray-600">Journal</span>
       </div>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Journal Entries</h1>
         <button onClick={openForm} className="btn-primary">+ New Entry</button>
+      </div>
+
+      <div className="mb-4">
+        <input
+          className="input max-w-sm"
+          placeholder="Search by reference, description or account…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
       {entries.length === 0 ? (
@@ -141,7 +161,10 @@ export default function JournalPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {entries.map((entry) => {
+              {filtered.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400 text-sm">No entries match your search.</td></tr>
+              )}
+              {filtered.map((entry) => {
                 const totalDr = entry.lines.reduce((s, l) => s + l.debit, 0);
                 return (
                   <tr key={entry.id} className="hover:bg-gray-50">

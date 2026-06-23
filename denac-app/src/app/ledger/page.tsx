@@ -14,6 +14,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function LedgerIndex() {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -32,8 +33,12 @@ export default function LedgerIndex() {
   }, []);
 
   const TYPES = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"];
+  const q = search.toLowerCase().trim();
+  const filtered = q
+    ? accounts.filter((a) => a.name.toLowerCase().includes(q) || a.code.toLowerCase().includes(q))
+    : accounts;
   const grouped = TYPES.reduce((acc, t) => {
-    acc[t] = accounts.filter((a) => a.type === t);
+    acc[t] = filtered.filter((a) => a.type === t);
     return acc;
   }, {} as Record<string, Account[]>);
 
@@ -47,8 +52,16 @@ export default function LedgerIndex() {
         <span className="text-gray-600">Ledger</span>
       </div>
 
-      <h1 className="text-2xl font-bold mb-6">Ledger</h1>
-      <p className="text-gray-500 mb-6 text-sm">Select an account to view its ledger transactions.</p>
+      <h1 className="text-2xl font-bold mb-4">Ledger</h1>
+      <p className="text-gray-500 mb-4 text-sm">Select an account to view its ledger transactions.</p>
+      <div className="mb-6">
+        <input
+          className="input max-w-sm"
+          placeholder="Search accounts by name or code…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
 
       {loading && <p className="text-gray-400">Loading accounts…</p>}
       {error && <p className="text-red-600 text-sm mb-4 p-2 bg-red-50 rounded border border-red-200">{error}</p>}
