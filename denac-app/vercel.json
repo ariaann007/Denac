@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npx prisma generate && npm run build && npx prisma migrate deploy",
+  "env": {
+    "DATABASE_URL": {
+      "description": "Database connection string (use PostgreSQL or SQLite edge database)"
+    }
+  },
+  "envPrefix": "NEXT_PUBLIC_"
+}
