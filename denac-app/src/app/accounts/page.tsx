@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Account = {
   id: string;
@@ -41,7 +42,12 @@ export default function AccountsPage() {
     setLoading(true);
     fetch("/api/accounts")
       .then((r) => r.json())
-      .then((data) => { setAccounts(data); setLoading(false); });
+      .then((data) => { setAccounts(data); setLoading(false); })
+      .catch((err) => {
+        console.error("Failed to load accounts:", err);
+        setError("Failed to load accounts. Please refresh the page.");
+        setLoading(false);
+      });
   };
 
   useEffect(load, []);
@@ -92,6 +98,14 @@ export default function AccountsPage() {
 
   return (
     <div>
+      <div className="flex items-center gap-1.5 text-sm text-gray-400 mb-4">
+        <Link href="/journal" className="hover:underline text-purple-600">Journal</Link>
+        <span>/</span>
+        <Link href="/trial-balance" className="hover:underline text-purple-600">Trial Balance</Link>
+        <span>/</span>
+        <span className="text-gray-600">Chart of Accounts</span>
+      </div>
+
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Chart of Accounts</h1>
         <div className="flex gap-2">

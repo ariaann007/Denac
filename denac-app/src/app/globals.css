@@ -26,7 +26,7 @@ body {
 }
 
 .btn-primary {
-  @apply bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors;
+  @apply bg-purple-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-purple-800 transition-colors;
 }
 
 .btn-secondary {
@@ -34,7 +34,7 @@ body {
 }
 
 .input {
-  @apply w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500;
+  @apply w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500;
 }
 
 .label {

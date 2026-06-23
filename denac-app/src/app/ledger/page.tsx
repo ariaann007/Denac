@@ -14,9 +14,21 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function LedgerIndex() {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("/api/accounts").then((r) => r.json()).then(setAccounts);
+    fetch("/api/accounts")
+      .then((r) => r.json())
+      .then((data) => {
+        setAccounts(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load accounts:", err);
+        setError("Failed to load accounts. Please refresh the page.");
+        setLoading(false);
+      });
   }, []);
 
   const TYPES = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"];
@@ -27,9 +39,21 @@ export default function LedgerIndex() {
 
   return (
     <div>
+      <div className="flex items-center gap-1.5 text-sm text-gray-400 mb-4">
+        <Link href="/journal" className="hover:underline text-purple-600">Journal</Link>
+        <span>/</span>
+        <Link href="/trial-balance" className="hover:underline text-purple-600">Trial Balance</Link>
+        <span>/</span>
+        <span className="text-gray-600">Ledger</span>
+      </div>
+
       <h1 className="text-2xl font-bold mb-6">Ledger</h1>
       <p className="text-gray-500 mb-6 text-sm">Select an account to view its ledger transactions.</p>
-      {TYPES.map((type) =>
+
+      {loading && <p className="text-gray-400">Loading accounts…</p>}
+      {error && <p className="text-red-600 text-sm mb-4 p-2 bg-red-50 rounded border border-red-200">{error}</p>}
+
+      {!loading && !error && TYPES.map((type) =>
         grouped[type].length > 0 ? (
           <div key={type} className="mb-6">
             <h2 className={`text-xs font-semibold uppercase tracking-widest mb-2 ${TYPE_COLORS[type]}`}>{type}</h2>
@@ -49,7 +73,7 @@ export default function LedgerIndex() {
           </div>
         ) : null
       )}
-      {accounts.length === 0 && <p className="text-gray-400">No accounts yet.</p>}
+      {!loading && accounts.length === 0 && <p className="text-gray-400">No accounts yet.</p>}
     </div>
   );
 }
