@@ -5,5 +5,4 @@
       "description": "Database connection string (use PostgreSQL or SQLite edge database)"
     }
   },
-  "envPrefix": "NEXT_PUBLIC_"
 }
