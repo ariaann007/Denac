@@ -10,21 +10,18 @@ type Entry = {
   description: string;
   lines: { id: string; debit: number; credit: number; account: Account; description: string | null }[];
 };
+type Line = { accountId: string; debit: string; credit: string };
 
-const emptyVoucher = () => ({
-  date: today(),
-  reference: "",
-  accountToBePaid: "",   // DR side
-  paidFrom: "",          // CR side
-  particular: "",        // narration / description
-  amount: "",
-});
+const emptyLine = (): Line => ({ accountId: "", debit: "", credit: "" });
 
 export default function JournalPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [voucher, setVoucher] = useState(emptyVoucher());
+  const [date, setDate] = useState(today());
+  const [reference, setReference] = useState("");
+  const [description, setDescription] = useState("");
+  const [lines, setLines] = useState<Line[]>([emptyLine(), emptyLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -35,46 +32,57 @@ export default function JournalPage() {
     ]).then(([j, a]) => {
       setEntries(j);
       setAccounts(a);
-    }).catch((err) => {
-      console.error("Failed to load data:", err);
-      setError("Failed to load data. Please refresh the page.");
     });
   };
 
   useEffect(load, []);
 
-  // Bank/cash accounts go in "Paid From"; all accounts available for "Account to be Paid"
-  const fundAccounts = accounts.filter(
-    (a) => a.subtype === "BANK" || a.subtype === "CASH"
-  );
-
   const openForm = () => {
-    setVoucher(emptyVoucher());
+    setDate(today());
+    setReference("");
+    setDescription("");
+    setLines([emptyLine(), emptyLine()]);
     setError("");
     setShowForm(true);
   };
 
+  const updateLine = (i: number, field: keyof Line, value: string) => {
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
+  };
+
+  const addLine = () => setLines((prev) => [...prev, emptyLine()]);
+
+  const removeLine = (i: number) => {
+    if (lines.length <= 2) return;
+    setLines((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const totalDebits = lines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
+  const totalCredits = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
+  const diff = Math.abs(totalDebits - totalCredits);
+  const balanced = diff < 0.005 && totalDebits > 0;
+
   const save = async () => {
     setError("");
-    const amount = parseFloat(voucher.amount);
-    if (!voucher.date) { setError("Date is required"); return; }
-    if (!voucher.reference) { setError("Reference is required"); return; }
-    if (!voucher.accountToBePaid) { setError("Account to be paid is required"); return; }
-    if (!voucher.paidFrom) { setError("Paid from account is required"); return; }
-    if (!voucher.particular) { setError("Particular / description is required"); return; }
-    if (!amount || amount <= 0) { setError("Enter a valid amount"); return; }
+    if (!date) { setError("Date is required"); return; }
+    if (!reference.trim()) { setError("Reference is required"); return; }
+    if (!description.trim()) { setError("Description is required"); return; }
+
+    const filledLines = lines.filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
+    if (filledLines.length < 2) { setError("At least 2 lines with amounts are required"); return; }
+    if (!balanced) { setError(`Entry is unbalanced — debits (£${totalDebits.toFixed(2)}) ≠ credits (£${totalCredits.toFixed(2)})`); return; }
 
     setSaving(true);
     const payload = {
-      date: voucher.date,
-      reference: voucher.reference,
-      description: voucher.particular,
-      lines: [
-        // DR: account to be paid
-        { accountId: voucher.accountToBePaid, debit: amount, credit: 0, description: voucher.particular },
-        // CR: paid from
-        { accountId: voucher.paidFrom, debit: 0, credit: amount, description: voucher.particular },
-      ],
+      date,
+      reference: reference.trim(),
+      description: description.trim(),
+      lines: filledLines.map((l) => ({
+        accountId: l.accountId,
+        debit: parseFloat(l.debit) || 0,
+        credit: parseFloat(l.credit) || 0,
+        description: description.trim(),
+      })),
     };
 
     const res = await fetch("/api/journals", {
@@ -100,16 +108,7 @@ export default function JournalPage() {
   };
 
   const fmt = (n: number) =>
-    n === 0
-      ? ""
-      : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
-
-  // Derive a friendly summary from an entry: find which line is the DR side
-  const summarise = (entry: Entry) => {
-    const dr = entry.lines.find((l) => l.debit > 0);
-    const cr = entry.lines.find((l) => l.credit > 0);
-    return { dr, cr, amount: dr?.debit ?? 0 };
-  };
+    n === 0 ? "" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(n);
 
   return (
     <div>
@@ -135,16 +134,15 @@ export default function JournalPage() {
               <tr>
                 <th className="px-4 py-2 text-left">Date</th>
                 <th className="px-4 py-2 text-left">Ref</th>
-                <th className="px-4 py-2 text-left">Particular</th>
-                <th className="px-4 py-2 text-left">Account Paid</th>
-                <th className="px-4 py-2 text-left">Paid From</th>
-                <th className="px-4 py-2 text-right">Amount</th>
+                <th className="px-4 py-2 text-left">Description</th>
+                <th className="px-4 py-2 text-right">Debits</th>
+                <th className="px-4 py-2 text-right">Lines</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {entries.map((entry) => {
-                const { dr, cr, amount } = summarise(entry);
+                const totalDr = entry.lines.reduce((s, l) => s + l.debit, 0);
                 return (
                   <tr key={entry.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -152,26 +150,10 @@ export default function JournalPage() {
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-500">{entry.reference}</td>
                     <td className="px-4 py-3">{entry.description}</td>
-                    <td className="px-4 py-3">
-                      {dr ? (
-                        <Link href={`/ledger/${dr.account.id}`} className="text-purple-700 hover:underline">
-                          {dr.account.name}
-                        </Link>
-                      ) : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {cr ? (
-                        <Link href={`/ledger/${cr.account.id}`} className="text-purple-700 hover:underline">
-                          {cr.account.name}
-                        </Link>
-                      ) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-medium">{fmt(amount)}</td>
+                    <td className="px-4 py-3 text-right font-mono font-medium">{fmt(totalDr)}</td>
+                    <td className="px-4 py-3 text-right text-gray-400 text-xs">{entry.lines.length}</td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => deleteEntry(entry.id)}
-                        className="text-red-400 hover:text-red-600 text-xs"
-                      >
+                      <button onClick={() => deleteEntry(entry.id)} className="text-red-400 hover:text-red-600 text-xs">
                         Delete
                       </button>
                     </td>
@@ -185,161 +167,109 @@ export default function JournalPage() {
 
       {/* New Entry Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 overflow-y-auto py-10">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg mx-4">
-            <h2 className="text-lg font-semibold mb-1">New Journal Entry</h2>
-            <p className="text-xs text-gray-500 mb-5">
-              The double-entry (Dr/Cr) is created automatically.
-            </p>
+        <div className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 overflow-y-auto py-10">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-3xl mx-4">
+            <h2 className="text-xl font-bold mb-1">Create Journal Entry</h2>
 
             {error && (
-              <p className="text-red-600 text-sm mb-4 p-2 bg-red-50 rounded border border-red-200">
-                {error}
-              </p>
+              <p className="text-red-600 text-sm mb-4 p-2 bg-red-50 rounded border border-red-200">{error}</p>
             )}
 
-            <div className="space-y-4">
-              {/* Date & Reference on same row */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Date</label>
-                  <input
-                    type="date"
-                    className="input"
-                    value={voucher.date}
-                    onChange={(e) => setVoucher({ ...voucher, date: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="label">Reference No.</label>
-                  <input
-                    className="input"
-                    placeholder="e.g. JNL-001"
-                    value={voucher.reference}
-                    onChange={(e) => setVoucher({ ...voucher, reference: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              {/* Account to be Paid */}
+            {/* Header fields */}
+            <div className="grid grid-cols-3 gap-3 mb-5">
               <div>
-                <label className="label">Account to be Paid (Debit)</label>
-                <select
-                  className="input"
-                  value={voucher.accountToBePaid}
-                  onChange={(e) => setVoucher({ ...voucher, accountToBePaid: e.target.value })}
-                >
-                  <option value="">— Select account —</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.code} — {a.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  The expense, asset, or person being paid / charged.
-                </p>
+                <label className="label">Date</label>
+                <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
-
-              {/* Particular */}
               <div>
-                <label className="label">Particular</label>
-                <input
-                  className="input"
-                  placeholder="e.g. Office rent for June 2026"
-                  value={voucher.particular}
-                  onChange={(e) => setVoucher({ ...voucher, particular: e.target.value })}
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  What is this payment / transaction for?
-                </p>
+                <label className="label">Reference Number</label>
+                <input className="input font-mono" placeholder="e.g. JNL-001" value={reference} onChange={(e) => setReference(e.target.value)} />
               </div>
-
-              {/* Paid From */}
               <div>
-                <label className="label">Paid From (Credit)</label>
-                <select
-                  className="input"
-                  value={voucher.paidFrom}
-                  onChange={(e) => setVoucher({ ...voucher, paidFrom: e.target.value })}
-                >
-                  <option value="">— Select account —</option>
-                  {fundAccounts.length > 0 && (
-                    <optgroup label="Bank & Cash">
-                      {fundAccounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.code} — {a.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  <optgroup label="All Accounts">
-                    {accounts
-                      .filter((a) => !fundAccounts.find((f) => f.id === a.id))
-                      .map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.code} — {a.name}
-                        </option>
-                      ))}
-                  </optgroup>
-                </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  Which bank or cash account is the payment coming from?
-                </p>
+                <label className="label">Narration / Description</label>
+                <input className="input" placeholder="e.g. Purchase of office computers" value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
-
-              {/* Amount */}
-              <div>
-                <label className="label">Amount (£)</label>
-                <input
-                  className="input font-mono text-right"
-                  placeholder="0.00"
-                  value={voucher.amount}
-                  onChange={(e) => setVoucher({ ...voucher, amount: e.target.value })}
-                />
-              </div>
-
-              {/* Preview of double-entry */}
-              {voucher.accountToBePaid && voucher.paidFrom && parseFloat(voucher.amount) > 0 && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs">
-                  <p className="font-semibold text-purple-700 mb-2">Double-entry preview</p>
-                  <table className="w-full">
-                    <thead>
-                      <tr className="text-gray-500">
-                        <th className="text-left font-normal">Account</th>
-                        <th className="text-right font-normal">Dr</th>
-                        <th className="text-right font-normal">Cr</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="py-0.5">
-                          {accounts.find((a) => a.id === voucher.accountToBePaid)?.name}
-                        </td>
-                        <td className="text-right font-mono">
-                          {parseFloat(voucher.amount).toFixed(2)}
-                        </td>
-                        <td></td>
-                      </tr>
-                      <tr>
-                        <td className="py-0.5 pl-4 text-gray-500">
-                          {accounts.find((a) => a.id === voucher.paidFrom)?.name}
-                        </td>
-                        <td></td>
-                        <td className="text-right font-mono">
-                          {parseFloat(voucher.amount).toFixed(2)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </div>
 
-            <div className="flex gap-2 mt-6 justify-end">
+            {/* Lines table */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden mb-3">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Account Select</th>
+                    <th className="px-3 py-2 text-right w-36">Debit (£)</th>
+                    <th className="px-3 py-2 text-right w-36">Credit (£)</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {lines.map((line, i) => (
+                    <tr key={i} className="bg-white">
+                      <td className="px-3 py-2">
+                        <select
+                          className="input py-1.5 text-sm"
+                          value={line.accountId}
+                          onChange={(e) => updateLine(i, "accountId", e.target.value)}
+                        >
+                          <option value="">-- Choose Account --</option>
+                          {accounts.map((a) => (
+                            <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          className="input py-1.5 text-sm text-right font-mono"
+                          placeholder="0.00"
+                          value={line.debit}
+                          onChange={(e) => updateLine(i, "debit", e.target.value)}
+                          onFocus={() => { if (!line.debit) updateLine(i, "credit", ""); }}
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          className="input py-1.5 text-sm text-right font-mono"
+                          placeholder="0.00"
+                          value={line.credit}
+                          onChange={(e) => updateLine(i, "credit", e.target.value)}
+                          onFocus={() => { if (!line.credit) updateLine(i, "debit", ""); }}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          onClick={() => removeLine(i)}
+                          className="text-gray-300 hover:text-red-400 text-lg leading-none"
+                          title="Remove line"
+                        >
+                          −
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Totals row */}
+              <div className="bg-gray-50 border-t border-gray-200 px-3 py-2 flex items-center gap-3 text-sm">
+                <button onClick={addLine} className="btn-secondary py-1 px-3 text-xs">+ Add Line</button>
+                <div className="ml-auto flex items-center gap-6">
+                  <span className="font-medium">Debits: <span className="font-mono">£{totalDebits.toFixed(2)}</span></span>
+                  <span className="font-medium">Credits: <span className="font-mono">£{totalCredits.toFixed(2)}</span></span>
+                  {totalDebits === 0 && totalCredits === 0 ? null : balanced ? (
+                    <span className="text-green-600 text-xs font-medium bg-green-50 border border-green-200 rounded px-2 py-1">✓ Balanced</span>
+                  ) : (
+                    <span className="text-red-600 text-xs font-medium bg-red-50 border border-red-200 rounded px-2 py-1">
+                      ⊗ Unbalanced (Diff: £{diff.toFixed(2)})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-4 justify-end">
               <button onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               <button onClick={save} disabled={saving} className="btn-primary disabled:opacity-50">
-                {saving ? "Saving…" : "Post Journal"}
+                {saving ? "Saving…" : "Post Journal Entry"}
               </button>
             </div>
           </div>
