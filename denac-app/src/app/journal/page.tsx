@@ -19,6 +19,7 @@ export default function JournalPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [date, setDate] = useState(today());
   const [reference, setReference] = useState("");
   const [description, setDescription] = useState("");
@@ -39,10 +40,25 @@ export default function JournalPage() {
   useEffect(load, []);
 
   const openForm = () => {
+    setEditingId(null);
     setDate(today());
     setReference("");
     setDescription("");
     setLines([emptyLine(), emptyLine()]);
+    setError("");
+    setShowForm(true);
+  };
+
+  const openEdit = (entry: Entry) => {
+    setEditingId(entry.id);
+    setDate(entry.date.split("T")[0]);
+    setReference(entry.reference);
+    setDescription(entry.description);
+    setLines(entry.lines.map((l) => ({
+      accountId: l.account.id,
+      debit: l.debit > 0 ? String(l.debit) : "",
+      credit: l.credit > 0 ? String(l.credit) : "",
+    })));
     setError("");
     setShowForm(true);
   };
@@ -86,8 +102,10 @@ export default function JournalPage() {
       })),
     };
 
-    const res = await fetch("/api/journals", {
-      method: "POST",
+    const url = editingId ? `/api/journals/${editingId}` : "/api/journals";
+    const method = editingId ? "PUT" : "POST";
+    const res = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -175,7 +193,10 @@ export default function JournalPage() {
                     <td className="px-4 py-3">{entry.description}</td>
                     <td className="px-4 py-3 text-right font-mono font-medium">{fmt(totalDr)}</td>
                     <td className="px-4 py-3 text-right text-gray-400 text-xs">{entry.lines.length}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right flex gap-3 justify-end">
+                      <button onClick={() => openEdit(entry)} className="text-purple-500 hover:text-purple-700 text-xs">
+                        Edit
+                      </button>
                       <button onClick={() => deleteEntry(entry.id)} className="text-red-400 hover:text-red-600 text-xs">
                         Delete
                       </button>
@@ -192,7 +213,7 @@ export default function JournalPage() {
       {showForm && (
         <div className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 overflow-y-auto py-10">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-3xl mx-4">
-            <h2 className="text-xl font-bold mb-1">Create Journal Entry</h2>
+            <h2 className="text-xl font-bold mb-1">{editingId ? "Edit Journal Entry" : "Create Journal Entry"}</h2>
 
             {error && (
               <p className="text-red-600 text-sm mb-4 p-2 bg-red-50 rounded border border-red-200">{error}</p>
@@ -292,7 +313,7 @@ export default function JournalPage() {
             <div className="flex gap-2 mt-4 justify-end">
               <button onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               <button onClick={save} disabled={saving} className="btn-primary disabled:opacity-50">
-                {saving ? "Saving…" : "Post Journal Entry"}
+                {saving ? "Saving…" : editingId ? "Save Changes" : "Post Journal Entry"}
               </button>
             </div>
           </div>
