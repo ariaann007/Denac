@@ -14,9 +14,10 @@ model Account {
   type        String        // ASSET | LIABILITY | EQUITY | INCOME | EXPENSE
   subtype     String?       // BANK | CASH | DEBTOR | CREDITOR
   description String?
-  isActive    Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  lines       JournalLine[]
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  lines          JournalLine[]
+  scheduledLines ScheduledLine[]
 }
 
 model JournalEntry {
@@ -37,4 +38,27 @@ model JournalLine {
   debit          Float        @default(0)
   credit         Float        @default(0)
   description    String?
+}
+
+model ScheduledEntry {
+  id          String          @id @default(cuid())
+  name        String
+  reference   String
+  description String
+  frequency   String          // MONTHLY | WEEKLY | YEARLY
+  dayOfMonth  Int             @default(1)  // 1-28 for MONTHLY
+  nextDueDate DateTime
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  lines       ScheduledLine[]
+}
+
+model ScheduledLine {
+  id               String         @id @default(cuid())
+  scheduledEntry   ScheduledEntry @relation(fields: [scheduledEntryId], references: [id], onDelete: Cascade)
+  scheduledEntryId String
+  account          Account        @relation(fields: [accountId], references: [id])
+  accountId        String
+  debit            Float          @default(0)
+  credit           Float          @default(0)
 }

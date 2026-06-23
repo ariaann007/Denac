@@ -8,6 +8,7 @@ const links = [
   { href: "/journal", label: "Journal" },
   { href: "/ledger", label: "Ledger" },
   { href: "/trial-balance", label: "Trial Balance" },
+  { href: "/scheduled", label: "Scheduled" },
 ];
 
 export default function Nav() {

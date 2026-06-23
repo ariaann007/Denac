@@ -1,3 +1,9 @@
 {
-  "buildCommand": "npx prisma generate && npm run build && npx prisma migrate deploy"
+  "buildCommand": "npx prisma generate && npm run build && npx prisma migrate deploy",
+  "crons": [
+    {
+      "path": "/api/cron/process-scheduled",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }
