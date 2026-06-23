@@ -41,16 +41,17 @@ model JournalLine {
 }
 
 model ScheduledEntry {
-  id          String          @id @default(cuid())
-  name        String
-  reference   String
-  description String
-  frequency   String          // MONTHLY | WEEKLY | YEARLY
-  dayOfMonth  Int             @default(1)  // 1-28 for MONTHLY
-  nextDueDate DateTime
-  isActive    Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  lines       ScheduledLine[]
+  id             String          @id @default(cuid())
+  name           String
+  reference      String
+  description    String
+  intervalType   String          // DAYS | WEEKS | MONTHS | YEARS
+  intervalValue  Int             @default(1)  // e.g. 28 for every 28 days, 3 for quarterly
+  dayOfMonth     Int?            // if set, MONTHS will anchor to this day (1-28); null = rolling
+  nextDueDate    DateTime
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  lines          ScheduledLine[]
 }
 
 model ScheduledLine {

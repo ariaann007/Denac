@@ -11,9 +11,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { name, reference, description, frequency, dayOfMonth, nextDueDate, lines } = body;
+  const { name, reference, description, intervalType, intervalValue, dayOfMonth, nextDueDate, lines } = body;
 
-  if (!name || !reference || !description || !frequency || !nextDueDate || !lines?.length) {
+  if (!name || !reference || !description || !intervalType || !nextDueDate || !lines?.length) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -22,8 +22,9 @@ export async function POST(request: NextRequest) {
       name,
       reference,
       description,
-      frequency,
-      dayOfMonth: dayOfMonth ?? 1,
+      intervalType,
+      intervalValue: intervalValue ?? 1,
+      dayOfMonth: dayOfMonth ?? null,
       nextDueDate: new Date(nextDueDate),
       lines: {
         create: lines.map((l: { accountId: string; debit: number; credit: number }) => ({

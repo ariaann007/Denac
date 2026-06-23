@@ -7,7 +7,7 @@ export async function PUT(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const { name, reference, description, frequency, dayOfMonth, nextDueDate, isActive, lines } = body;
+  const { name, reference, description, intervalType, intervalValue, dayOfMonth, nextDueDate, isActive, lines } = body;
 
   const entry = await prisma.scheduledEntry.update({
     where: { id },
@@ -15,8 +15,9 @@ export async function PUT(
       name,
       reference,
       description,
-      frequency,
-      dayOfMonth,
+      intervalType,
+      intervalValue,
+      dayOfMonth: dayOfMonth ?? null,
       nextDueDate: new Date(nextDueDate),
       isActive,
       lines: lines

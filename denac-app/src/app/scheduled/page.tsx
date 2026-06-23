@@ -9,15 +9,33 @@ type ScheduledEntry = {
   name: string;
   reference: string;
   description: string;
-  frequency: string;
-  dayOfMonth: number;
+  intervalType: string;
+  intervalValue: number;
+  dayOfMonth: number | null;
   nextDueDate: string;
   isActive: boolean;
   lines: { id: string; accountId: string; debit: number; credit: number; account: Account }[];
 };
 
 const emptyLine = (): SLine => ({ accountId: "", debit: "", credit: "" });
-const FREQ_LABELS: Record<string, string> = { MONTHLY: "Monthly", WEEKLY: "Weekly", YEARLY: "Yearly" };
+
+function intervalLabel(e: ScheduledEntry): string {
+  const v = e.intervalValue;
+  switch (e.intervalType) {
+    case "DAYS":   return `Every ${v} day${v !== 1 ? "s" : ""}`;
+    case "WEEKS":  return `Every ${v} week${v !== 1 ? "s" : ""}`;
+    case "MONTHS":
+      if (e.dayOfMonth) return `Every ${v} month${v !== 1 ? "s" : ""} on the ${ordinal(e.dayOfMonth)}`;
+      return `Every ${v} month${v !== 1 ? "s" : ""} (rolling)`;
+    case "YEARS":  return `Every ${v} year${v !== 1 ? "s" : ""}`;
+    default:       return e.intervalType;
+  }
+}
+
+function ordinal(n: number) {
+  const s = ["th","st","nd","rd"], v = n % 100;
+  return n + (s[(v-20)%10] || s[v] || s[0]);
+}
 
 export default function ScheduledPage() {
   const [entries, setEntries] = useState<ScheduledEntry[]>([]);
@@ -29,7 +47,9 @@ export default function ScheduledPage() {
   const [name, setName] = useState("");
   const [reference, setReference] = useState("");
   const [description, setDescription] = useState("");
-  const [frequency, setFrequency] = useState("MONTHLY");
+  const [intervalType, setIntervalType] = useState("MONTHS");
+  const [intervalValue, setIntervalValue] = useState("1");
+  const [anchorDay, setAnchorDay] = useState<"fixed" | "rolling">("fixed");
   const [dayOfMonth, setDayOfMonth] = useState("1");
   const [nextDueDate, setNextDueDate] = useState(today());
   const [lines, setLines] = useState<SLine[]>([emptyLine(), emptyLine()]);
@@ -45,18 +65,24 @@ export default function ScheduledPage() {
 
   useEffect(load, []);
 
-  const openCreate = () => {
+  const resetForm = () => {
     setEditingId(null);
     setName(""); setReference(""); setDescription("");
-    setFrequency("MONTHLY"); setDayOfMonth("1"); setNextDueDate(today());
+    setIntervalType("MONTHS"); setIntervalValue("1");
+    setAnchorDay("fixed"); setDayOfMonth("1");
+    setNextDueDate(today());
     setLines([emptyLine(), emptyLine()]);
-    setError(""); setShowForm(true);
+    setError("");
   };
+
+  const openCreate = () => { resetForm(); setShowForm(true); };
 
   const openEdit = (e: ScheduledEntry) => {
     setEditingId(e.id);
     setName(e.name); setReference(e.reference); setDescription(e.description);
-    setFrequency(e.frequency); setDayOfMonth(String(e.dayOfMonth));
+    setIntervalType(e.intervalType); setIntervalValue(String(e.intervalValue));
+    setAnchorDay(e.dayOfMonth !== null ? "fixed" : "rolling");
+    setDayOfMonth(e.dayOfMonth !== null ? String(e.dayOfMonth) : "1");
     setNextDueDate(e.nextDueDate.split("T")[0]);
     setLines(e.lines.map((l) => ({
       accountId: l.accountId,
@@ -67,25 +93,29 @@ export default function ScheduledPage() {
   };
 
   const updateLine = (i: number, field: keyof SLine, value: string) =>
-    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
+    setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
 
-  const totalDebits = lines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
+  const totalDebits  = lines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
   const totalCredits = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
   const balanced = Math.abs(totalDebits - totalCredits) < 0.005 && totalDebits > 0;
 
   const save = async () => {
     setError("");
-    if (!name.trim()) { setError("Name is required"); return; }
-    if (!reference.trim()) { setError("Reference prefix is required"); return; }
+    if (!name.trim())        { setError("Name is required"); return; }
+    if (!reference.trim())   { setError("Reference prefix is required"); return; }
     if (!description.trim()) { setError("Description is required"); return; }
+    const iv = parseInt(intervalValue);
+    if (!iv || iv < 1)       { setError("Interval must be at least 1"); return; }
     const filledLines = lines.filter((l) => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
     if (filledLines.length < 2) { setError("At least 2 lines with amounts required"); return; }
-    if (!balanced) { setError("Lines must balance (debits = credits)"); return; }
+    if (!balanced)           { setError("Lines must balance (debits = credits)"); return; }
 
     setSaving(true);
     const payload = {
       name: name.trim(), reference: reference.trim(), description: description.trim(),
-      frequency, dayOfMonth: parseInt(dayOfMonth), nextDueDate,
+      intervalType, intervalValue: iv,
+      dayOfMonth: intervalType === "MONTHS" && anchorDay === "fixed" ? parseInt(dayOfMonth) : null,
+      nextDueDate,
       lines: filledLines.map((l) => ({
         accountId: l.accountId,
         debit: parseFloat(l.debit) || 0,
@@ -94,8 +124,11 @@ export default function ScheduledPage() {
     };
 
     const url = editingId ? `/api/scheduled/${editingId}` : "/api/scheduled";
-    const method = editingId ? "PUT" : "POST";
-    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const res = await fetch(url, {
+      method: editingId ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
     setSaving(false);
     if (!res.ok) { const d = await res.json(); setError(d.error || "Failed to save"); return; }
     setShowForm(false); load();
@@ -132,7 +165,7 @@ export default function ScheduledPage() {
         <button onClick={openCreate} className="btn-primary">+ New Schedule</button>
       </div>
       <p className="text-sm text-gray-500 mb-6">
-        Set up recurring journal entries for direct debits, standing orders, and regular payments. They post automatically each day.
+        Set up recurring journal entries for direct debits, standing orders and regular payments. They post automatically each day.
       </p>
 
       {entries.length === 0 ? (
@@ -157,7 +190,7 @@ export default function ScheduledPage() {
                       <span className={`text-xs px-2 py-0.5 rounded font-medium ${entry.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                         {entry.isActive ? "Active" : "Paused"}
                       </span>
-                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{FREQ_LABELS[entry.frequency]}</span>
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{intervalLabel(entry)}</span>
                     </div>
                     <p className="text-sm text-gray-500 mt-0.5">{entry.description}</p>
                     <div className="flex items-center gap-4 mt-2 text-sm">
@@ -167,8 +200,6 @@ export default function ScheduledPage() {
                       </span>
                       <span className="text-gray-400">·</span>
                       <span className="font-mono font-semibold text-gray-800">{fmt(totalDr)}</span>
-                      <span className="text-gray-400">·</span>
-                      <span className="text-gray-500 text-xs">{entry.lines.length} lines</span>
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
@@ -193,6 +224,7 @@ export default function ScheduledPage() {
 
             {error && <p className="text-red-600 text-sm mb-4 p-2 bg-red-50 rounded border border-red-200">{error}</p>}
 
+            {/* Name / Reference / Description */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
                 <label className="label">Name</label>
@@ -201,7 +233,7 @@ export default function ScheduledPage() {
               <div>
                 <label className="label">Reference Prefix</label>
                 <input className="input font-mono" placeholder="e.g. RENT" value={reference} onChange={(e) => setReference(e.target.value)} />
-                <p className="text-xs text-gray-400 mt-1">Auto-appended with year-month when posted (e.g. RENT-2026-07)</p>
+                <p className="text-xs text-gray-400 mt-1">Auto-appended with year-month (e.g. RENT-2026-07)</p>
               </div>
               <div className="col-span-2">
                 <label className="label">Description</label>
@@ -209,25 +241,66 @@ export default function ScheduledPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 mb-5">
-              <div>
-                <label className="label">Frequency</label>
-                <select className="input" value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-                  <option value="MONTHLY">Monthly</option>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="YEARLY">Yearly</option>
-                </select>
-              </div>
-              {frequency === "MONTHLY" && (
+            {/* Interval section */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <p className="text-sm font-semibold text-gray-700 mb-3">Repeat Interval</p>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
-                  <label className="label">Day of Month</label>
-                  <input type="number" min="1" max="28" className="input" value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} />
-                  <p className="text-xs text-gray-400 mt-1">Max 28 to avoid month-end issues</p>
+                  <label className="label">Repeat every</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number" min="1" max="365"
+                      className="input w-24 text-center font-mono"
+                      value={intervalValue}
+                      onChange={(e) => setIntervalValue(e.target.value)}
+                    />
+                    <select className="input flex-1" value={intervalType} onChange={(e) => setIntervalType(e.target.value)}>
+                      <option value="DAYS">Day(s)</option>
+                      <option value="WEEKS">Week(s)</option>
+                      <option value="MONTHS">Month(s)</option>
+                      <option value="YEARS">Year(s)</option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {intervalType === "DAYS"   && `e.g. 28 = every 28 days`}
+                    {intervalType === "WEEKS"  && `e.g. 2 = fortnightly`}
+                    {intervalType === "MONTHS" && `e.g. 3 = quarterly, 1 = monthly`}
+                    {intervalType === "YEARS"  && `e.g. 1 = annually`}
+                  </p>
                 </div>
-              )}
-              <div>
+
+                {intervalType === "MONTHS" && (
+                  <div>
+                    <label className="label">Day of month</label>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="radio" name="anchor" value="fixed" checked={anchorDay === "fixed"} onChange={() => setAnchorDay("fixed")} className="accent-purple-600" />
+                        <span>Fixed day</span>
+                        {anchorDay === "fixed" && (
+                          <input type="number" min="1" max="28" className="input w-16 py-1 text-sm text-center font-mono" value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} />
+                        )}
+                      </label>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="radio" name="anchor" value="rolling" checked={anchorDay === "rolling"} onChange={() => setAnchorDay("rolling")} className="accent-purple-600" />
+                        <span>Rolling (same day as last posting)</span>
+                      </label>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {anchorDay === "fixed" ? `Posts on the ${ordinal(parseInt(dayOfMonth) || 1)} of each month` : "Counts forward from the last due date"}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Preview */}
+              <div className="bg-purple-50 border border-purple-200 rounded px-3 py-2 text-sm text-purple-800 font-medium">
+                📅 {buildPreview(intervalType, parseInt(intervalValue) || 1, intervalType === "MONTHS" && anchorDay === "fixed" ? parseInt(dayOfMonth) || 1 : null)}
+              </div>
+
+              <div className="mt-3">
                 <label className="label">First / Next Due Date</label>
-                <input type="date" className="input" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} />
+                <input type="date" className="input max-w-xs" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} />
               </div>
             </div>
 
@@ -288,6 +361,23 @@ export default function ScheduledPage() {
       )}
     </div>
   );
+}
+
+function buildPreview(intervalType: string, intervalValue: number, dayOfMonth: number | null): string {
+  const v = intervalValue;
+  switch (intervalType) {
+    case "DAYS":
+      return v === 1 ? "Posts every day" : `Posts every ${v} days`;
+    case "WEEKS":
+      return v === 1 ? "Posts every week" : `Posts every ${v} weeks`;
+    case "MONTHS":
+      if (dayOfMonth) return v === 1 ? `Posts on the ${ordinal(dayOfMonth)} of every month` : `Posts on the ${ordinal(dayOfMonth)} every ${v} months`;
+      return v === 1 ? "Posts every month (rolling from last post)" : `Posts every ${v} months (rolling)`;
+    case "YEARS":
+      return v === 1 ? "Posts once a year" : `Posts every ${v} years`;
+    default:
+      return "";
+  }
 }
 
 function today() {
