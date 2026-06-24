@@ -16,7 +16,7 @@ type AccountWithBalance = Account & {
   debitBalance: number;
   creditBalance: number;
   // Effective status derived purely from balance — ignores initial setup
-  effectiveStatus: "DEBTOR" | "CREDITOR" | "NEUTRAL";
+  effectiveStatus: "DEBTOR" | "CREDITOR" | "SETTLED";
 };
 
 const TYPES = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"];
@@ -119,13 +119,13 @@ export default function AccountsPage() {
       const effectiveStatus: AccountWithBalance["effectiveStatus"] =
         b.debitBalance > 0.005 ? "DEBTOR"
         : b.creditBalance > 0.005 ? "CREDITOR"
-        : "NEUTRAL";
+        : "SETTLED";
       return { ...a, ...b, effectiveStatus };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const totalOwedToUs   = personAccounts.filter(a => a.effectiveStatus === "DEBTOR").reduce((s, a) => s + a.debitBalance, 0);
-  const totalWeOwe      = personAccounts.filter(a => a.effectiveStatus === "CREDITOR").reduce((s, a) => s + a.creditBalance, 0);
+  const totalOwedToUs = personAccounts.filter(a => a.effectiveStatus === "DEBTOR").reduce((s, a) => s + a.debitBalance, 0);
+  const totalWeOwe    = personAccounts.filter(a => a.effectiveStatus === "CREDITOR").reduce((s, a) => s + a.creditBalance, 0);
 
   // Remaining accounts (no DEBTOR/CREDITOR subtype) grouped by type
   const regularAccounts = accounts.filter((a) => a.subtype !== "DEBTOR" && a.subtype !== "CREDITOR");
@@ -205,9 +205,7 @@ export default function AccountsPage() {
                             <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Debtor</span>
                           ) : a.effectiveStatus === "CREDITOR" ? (
                             <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Creditor</span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">Neutral</span>
-                          )}
+                          ) : null}
                         </td>
                         <td className="px-4 py-2.5 text-right font-mono font-semibold">
                           {a.effectiveStatus === "DEBTOR" ? (
@@ -225,7 +223,6 @@ export default function AccountsPage() {
                           {a.effectiveStatus === "CREDITOR" && a.subtype === "DEBTOR" && (
                             <span className="italic text-orange-500">Originally debtor — we now owe them</span>
                           )}
-                          {a.effectiveStatus === "NEUTRAL" && "Settled"}
                         </td>
                         <td className="px-4 py-2.5 text-right">
                           <button onClick={() => openEdit(a)} className="text-indigo-600 hover:underline text-xs">Edit</button>
