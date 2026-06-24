@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Account = { id: string; code: string; name: string; type: string; subtype: string | null };
@@ -267,16 +267,11 @@ export default function JournalPage() {
                   {lines.map((line, i) => (
                     <tr key={i} className="bg-white">
                       <td className="px-3 py-2">
-                        <select
-                          className="input py-1.5 text-sm"
+                        <AccountSearch
+                          accounts={accounts}
                           value={line.accountId}
-                          onChange={(e) => updateLine(i, "accountId", e.target.value)}
-                        >
-                          <option value="">-- Choose Account --</option>
-                          {accounts.map((a) => (
-                            <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
-                          ))}
-                        </select>
+                          onChange={(id) => updateLine(i, "accountId", id)}
+                        />
                       </td>
                       <td className="px-3 py-2">
                         <select
@@ -354,4 +349,87 @@ export default function JournalPage() {
 
 function today() {
   return new Date().toISOString().split("T")[0];
+}
+
+type AccountSearchProps = {
+  accounts: { id: string; code: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+};
+
+function AccountSearch({ accounts, value, onChange }: AccountSearchProps) {
+  const selected = accounts.find((a) => a.id === value);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filtered = query.trim()
+    ? accounts.filter(
+        (a) =>
+          a.name.toLowerCase().includes(query.toLowerCase()) ||
+          a.code.toLowerCase().includes(query.toLowerCase())
+      )
+    : accounts;
+
+  const handleSelect = (id: string) => {
+    onChange(id);
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <div
+        className="input py-1.5 text-sm flex items-center gap-1 cursor-pointer min-h-[34px]"
+        onClick={() => { setOpen(true); setQuery(""); }}
+      >
+        {open ? (
+          <input
+            autoFocus
+            className="flex-1 outline-none bg-transparent text-sm"
+            placeholder="Search account…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : selected ? (
+          <span className="flex-1 truncate">
+            <span className="font-mono text-gray-400 text-xs mr-1">{selected.code}</span>
+            {selected.name}
+          </span>
+        ) : (
+          <span className="text-gray-400 flex-1">Search account…</span>
+        )}
+        <span className="text-gray-400 text-xs ml-1">▾</span>
+      </div>
+
+      {open && (
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-gray-400 text-xs">No accounts match</div>
+          ) : (
+            filtered.map((a) => (
+              <div
+                key={a.id}
+                className={`px-3 py-2 cursor-pointer hover:bg-purple-50 flex items-center gap-2 ${a.id === value ? "bg-purple-50 font-medium" : ""}`}
+                onMouseDown={(e) => { e.preventDefault(); handleSelect(a.id); }}
+              >
+                <span className="font-mono text-xs text-gray-400 w-12 shrink-0">{a.code}</span>
+                <span className="truncate">{a.name}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
