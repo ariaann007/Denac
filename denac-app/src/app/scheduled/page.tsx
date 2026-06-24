@@ -234,7 +234,7 @@ export default function ScheduledPage() {
           >
             <div className="flex items-center gap-3">
               <span className="text-lg">📊</span>
-              <span className="font-semibold text-gray-800">8-Week Cash Flow Forecast</span>
+              <span className="font-semibold text-gray-800">4-Week Cash Flow Forecast</span>
               {forecast.warnings.length > 0 && (
                 <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
                   {forecast.warnings.length} balance warning{forecast.warnings.length > 1 ? "s" : ""}
@@ -306,7 +306,7 @@ export default function ScheduledPage() {
                     })}
                   </div>
                   <p className="text-xs text-gray-400 mt-3">
-                    Forecast based on scheduled entry due dates for the next 8 weeks. Balances are checked against current account balances.
+                    Forecast based on scheduled entry due dates for the next 4 weeks. Balances are checked against current account balances.
                   </p>
                 </div>
               ) : (
@@ -355,13 +355,18 @@ export default function ScheduledPage() {
                       <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{intervalLabel(entry)}</span>
                     </div>
                     <p className="text-sm text-gray-500 mt-0.5">{entry.description}</p>
-                    <div className="flex items-center gap-4 mt-2 text-sm">
-                      <span className={`font-medium ${overdue ? "text-red-600" : "text-gray-700"}`}>
-                        {overdue ? "⚠ Overdue — " : "Next: "}
-                        {dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${
+                        overdue
+                          ? "bg-red-50 border-red-300 text-red-700"
+                          : "bg-blue-50 border-blue-200 text-blue-700"
+                      }`}>
+                        {overdue ? "⚠ Overdue · " : "📅 Next payment · "}
+                        {dueDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
                       </span>
-                      <span className="text-gray-400">·</span>
-                      <span className="font-mono font-semibold text-gray-800">{fmt(totalDr)}</span>
+                      <span className="inline-flex items-center text-xs font-mono font-semibold bg-gray-100 border border-gray-200 text-gray-700 px-2.5 py-1 rounded-full">
+                        {fmt(totalDr)}
+                      </span>
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">

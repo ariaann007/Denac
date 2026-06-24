@@ -52,7 +52,7 @@ export async function GET() {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   const horizon = new Date(now);
-  horizon.setDate(horizon.getDate() + 56);
+  horizon.setDate(horizon.getDate() + 28);
 
   // Week bucket helper: ISO week start (Monday)
   function weekStart(d: Date): string {
