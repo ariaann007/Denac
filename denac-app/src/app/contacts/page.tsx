@@ -28,6 +28,7 @@ const emptyForm = () => ({ name: "", email: "", phone: "", notes: "" });
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"ALL" | "DEBTOR" | "CREDITOR" | "NEUTRAL">("ALL");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm());
@@ -93,10 +94,13 @@ export default function ContactsPage() {
     return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Neutral</span>;
   };
 
+  const totalDebtors  = contacts.filter(c => c.status === "DEBTOR").reduce((s, c) => s + c.balance, 0);
+  const totalCreditors = contacts.filter(c => c.status === "CREDITOR").reduce((s, c) => s + Math.abs(c.balance), 0);
+
   const q = search.toLowerCase().trim();
-  const filtered = q
-    ? contacts.filter((c) => c.name.toLowerCase().includes(q) || (c.email || "").toLowerCase().includes(q))
-    : contacts;
+  const filtered = contacts
+    .filter((c) => filter === "ALL" || c.status === filter)
+    .filter((c) => !q || c.name.toLowerCase().includes(q) || (c.email || "").toLowerCase().includes(q));
 
   return (
     <div>
@@ -105,14 +109,46 @@ export default function ContactsPage() {
         <button onClick={openCreate} className="btn-primary">+ New Contact</button>
       </div>
 
-      <div className="mb-4">
+      {/* Summary totals */}
+      {contacts.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 mb-5">
+          <div className="bg-white rounded-xl shadow px-5 py-4 border-l-4 border-green-400">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Owed to Us (Debtors)</p>
+            <p className="text-2xl font-bold font-mono text-green-600">{fmt(totalDebtors)}</p>
+            <p className="text-xs text-gray-400 mt-1">{contacts.filter(c => c.status === "DEBTOR").length} contact{contacts.filter(c => c.status === "DEBTOR").length !== 1 ? "s" : ""}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow px-5 py-4 border-l-4 border-amber-400">
+            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total We Owe (Creditors)</p>
+            <p className="text-2xl font-bold font-mono text-amber-600">{fmt(totalCreditors)}</p>
+            <p className="text-xs text-gray-400 mt-1">{contacts.filter(c => c.status === "CREDITOR").length} contact{contacts.filter(c => c.status === "CREDITOR").length !== 1 ? "s" : ""}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Filter tabs + search */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="flex rounded-lg border border-gray-200 bg-white overflow-hidden text-sm">
+          {(["ALL", "DEBTOR", "CREDITOR", "NEUTRAL"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 font-medium transition-colors ${filter === f ? "bg-purple-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              {f === "ALL" ? `All (${contacts.length})` : f === "DEBTOR" ? `Debtors (${contacts.filter(c => c.status === "DEBTOR").length})` : f === "CREDITOR" ? `Creditors (${contacts.filter(c => c.status === "CREDITOR").length})` : `Neutral (${contacts.filter(c => c.status === "NEUTRAL").length})`}
+            </button>
+          ))}
+        </div>
         <input
-          className="input max-w-sm"
+          className="input max-w-xs"
           placeholder="Search by name or email…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+
+      <p className="text-xs text-gray-400 mb-4">
+        ℹ Status is calculated automatically from the contact&apos;s transaction balance — a contact can switch between Debtor and Creditor as payments are made.
+      </p>
 
       {filtered.length === 0 ? (
         <p className="text-gray-400 text-sm">
