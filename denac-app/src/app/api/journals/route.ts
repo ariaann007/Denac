@@ -37,11 +37,12 @@ export async function POST(request: NextRequest) {
       reference,
       description,
       lines: {
-        create: lines.map((l: { accountId: string; debit: number; credit: number; description?: string }) => ({
+        create: lines.map((l: { accountId: string; debit: number; credit: number; description?: string; contactId?: string | null }) => ({
           accountId: l.accountId,
           debit: l.debit || 0,
           credit: l.credit || 0,
           description: l.description,
+          contactId: l.contactId || null,
         })),
       },
     },

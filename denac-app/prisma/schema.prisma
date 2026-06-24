@@ -29,12 +29,24 @@ model JournalEntry {
   lines       JournalLine[]
 }
 
+model Contact {
+  id        String        @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  notes     String?
+  createdAt DateTime      @default(now())
+  lines     JournalLine[]
+}
+
 model JournalLine {
   id             String       @id @default(cuid())
   journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
   journalEntryId String
   account        Account      @relation(fields: [accountId], references: [id])
   accountId      String
+  contact        Contact?     @relation(fields: [contactId], references: [id])
+  contactId      String?
   debit          Float        @default(0)
   credit         Float        @default(0)
   description    String?

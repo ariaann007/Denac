@@ -3,20 +3,22 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type Account = { id: string; code: string; name: string; type: string; subtype: string | null };
+type Contact = { id: string; name: string };
 type Entry = {
   id: string;
   date: string;
   reference: string;
   description: string;
-  lines: { id: string; debit: number; credit: number; account: Account; description: string | null }[];
+  lines: { id: string; debit: number; credit: number; account: Account; description: string | null; contactId?: string | null }[];
 };
-type Line = { accountId: string; debit: string; credit: string };
+type Line = { accountId: string; debit: string; credit: string; contactId?: string };
 
-const emptyLine = (): Line => ({ accountId: "", debit: "", credit: "" });
+const emptyLine = (): Line => ({ accountId: "", debit: "", credit: "", contactId: "" });
 
 export default function JournalPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -31,9 +33,11 @@ export default function JournalPage() {
     Promise.all([
       fetch("/api/journals").then((r) => r.json()),
       fetch("/api/accounts").then((r) => r.json()),
-    ]).then(([j, a]) => {
+      fetch("/api/contacts").then((r) => r.json()),
+    ]).then(([j, a, c]) => {
       setEntries(j);
       setAccounts(a);
+      setContacts(c);
     });
   };
 
@@ -62,6 +66,7 @@ export default function JournalPage() {
       accountId: l.account.id,
       debit: l.debit > 0 ? String(l.debit) : "",
       credit: l.credit > 0 ? String(l.credit) : "",
+      contactId: l.contactId || "",
     })));
     setError("");
     setShowForm(true);
@@ -103,6 +108,7 @@ export default function JournalPage() {
         debit: parseFloat(l.debit) || 0,
         credit: parseFloat(l.credit) || 0,
         description: description.trim(),
+        contactId: l.contactId || null,
       })),
     };
 
@@ -251,6 +257,7 @@ export default function JournalPage() {
                 <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
                   <tr>
                     <th className="px-3 py-2 text-left">Account Select</th>
+                    <th className="px-3 py-2 text-left w-40">Contact (optional)</th>
                     <th className="px-3 py-2 text-right w-36">Debit (£)</th>
                     <th className="px-3 py-2 text-right w-36">Credit (£)</th>
                     <th className="w-8"></th>
@@ -268,6 +275,18 @@ export default function JournalPage() {
                           <option value="">-- Choose Account --</option>
                           {accounts.map((a) => (
                             <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <select
+                          className="input py-1.5 text-sm"
+                          value={line.contactId || ""}
+                          onChange={(e) => updateLine(i, "contactId", e.target.value)}
+                        >
+                          <option value="">— none —</option>
+                          {contacts.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
                           ))}
                         </select>
                       </td>

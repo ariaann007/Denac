@@ -40,11 +40,12 @@ export async function PUT(
       description,
       lines: {
         deleteMany: {},
-        create: lines.map((l: { accountId: string; debit: number; credit: number; description?: string }) => ({
+        create: lines.map((l: { accountId: string; debit: number; credit: number; description?: string; contactId?: string | null }) => ({
           accountId: l.accountId,
           debit: l.debit,
           credit: l.credit,
           description: l.description ?? description,
+          contactId: l.contactId || null,
         })),
       },
     },
