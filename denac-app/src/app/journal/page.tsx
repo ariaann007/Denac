@@ -39,7 +39,7 @@ export default function JournalPage() {
 
   useEffect(load, []);
 
-  const openForm = () => {
+  const openForm = async () => {
     setEditingId(null);
     setDate(today());
     setReference("");
@@ -47,6 +47,10 @@ export default function JournalPage() {
     setLines([emptyLine(), emptyLine()]);
     setError("");
     setShowForm(true);
+    // Auto-generate reference
+    const res = await fetch("/api/journals/next-reference");
+    const { reference: ref } = await res.json();
+    setReference(ref);
   };
 
   const openEdit = (entry: Entry) => {
@@ -226,8 +230,14 @@ export default function JournalPage() {
                 <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
               <div>
-                <label className="label">Reference Number</label>
-                <input className="input font-mono" placeholder="e.g. JNL-001" value={reference} onChange={(e) => setReference(e.target.value)} />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="label mb-0">Reference Number</label>
+                  {!editingId && (
+                    <span className="text-xs text-purple-500 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded font-medium">auto-generated</span>
+                  )}
+                </div>
+                <input className="input font-mono" placeholder="e.g. JNL-202607-001" value={reference} onChange={(e) => setReference(e.target.value)} />
+                {!editingId && <p className="text-xs text-gray-400 mt-1">You can edit this if needed</p>}
               </div>
               <div>
                 <label className="label">Narration / Description</label>
