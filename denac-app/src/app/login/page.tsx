@@ -1,9 +1,7 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -24,8 +22,9 @@ export default function LoginPage() {
       setError(data.error || "Login failed");
       return;
     }
-    router.push("/");
-    router.refresh();
+    // Hard redirect — ensures the browser sends the cookie on the next request
+    // so the middleware can verify it cleanly
+    window.location.href = "/";
   };
 
   return (

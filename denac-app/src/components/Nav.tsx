@@ -17,8 +17,7 @@ export default function Nav() {
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+    window.location.href = "/login";
   };
 
   return (
